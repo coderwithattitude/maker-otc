@@ -332,7 +332,7 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
             require(offerId != 0); // Fails if there are not more offers
 
              // There is a chance that pay_amt is smaller than 1 wei of the other token
-            if (pay_amt * 1 ether < wdiv(offers[offerId].buy_amt, offers[offerId].pay_amt)) {
+            if (pay_amt * 1 ether < div(offers[offerId].buy_amt, offers[offerId].pay_amt)) {
                 break; // We consider that all amount is sold
             }
 
@@ -342,7 +342,7 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
                 take(bytes32(offerId), uint128(offers[offerId].pay_amt)); // We take the whole offer
 
             } else { // if lower
-                var baux = rmul(pay_amt * 10 ** 9, rdiv(offers[offerId].pay_amt, offers[offerId].buy_amt)) / 10 ** 9;
+                var baux = mul(pay_amt * 10 ** 9, div(offers[offerId].pay_amt, offers[offerId].buy_amt)) / 10 ** 9;
                 buy_amt = add(buy_amt, baux); // Add amount bought to acumulator
                 take(bytes32(offerId), uint128(baux)); // We take the portion of the offer that we need
                 pay_amt = 0; // All amount is sold
@@ -364,12 +364,12 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
                 if (buy_amt > 0) { // If we still need more offers
                     offerId = getBestOffer(buy_gem, pay_gem); // We look for the next best offer
                     require(offerId != 0); // Fails if there are not more offers
-                    if (buy_amt * 1 ether < wdiv(offers[offerId].pay_amt, offers[offerId].buy_amt)) { // There is a chance that some remaining buy_amt is smaller than 1 wei of the other token
+                    if (buy_amt * 1 ether < div(offers[offerId].pay_amt, offers[offerId].buy_amt)) { // There is a chance that some remaining buy_amt is smaller than 1 wei of the other token
                         buy_amt = 0; // We consider that all amount is sold
                     }
                 }
             } else { // if lower
-                pay_amt = add(pay_amt, rmul(buy_amt * 10 ** 9, rdiv(offers[offerId].buy_amt, offers[offerId].pay_amt)) / 10 ** 9); // Add amount sold to acumulator
+                pay_amt = add(pay_amt, mul(buy_amt * 10 ** 9, div(offers[offerId].buy_amt, offers[offerId].pay_amt)) / 10 ** 9); // Add amount sold to acumulator
                 take(bytes32(offerId), uint128(buy_amt)); // We take the portion of the offer that we need
                 buy_amt = 0; // All amount is bought
             }
@@ -387,7 +387,7 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
                 require(offerId != 0); // Fails if there are not enough offers to complete
             }
         }
-        buy_amt = add(buy_amt, rmul(pay_amt * 10 ** 9, rdiv(offers[offerId].pay_amt, offers[offerId].buy_amt)) / 10 ** 9); // Add proportional amount of last offer to pay accumulator
+        buy_amt = add(buy_amt, mul(pay_amt * 10 ** 9, div(offers[offerId].pay_amt, offers[offerId].buy_amt)) / 10 ** 9); // Add proportional amount of last offer to pay accumulator
     }
 
     function getPayAmount(ERC20 pay_gem, ERC20 buy_gem, uint buy_amt) public constant returns (uint pay_amt) {
@@ -400,7 +400,7 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
                 require(offerId != 0); // Fails if there are not enough offers to complete
             }
         }
-        pay_amt = add(pay_amt, rmul(buy_amt * 10 ** 9, rdiv(offers[offerId].buy_amt, offers[offerId].pay_amt)) / 10 ** 9); // Add proportional amount of last offer to pay accumulator
+        pay_amt = add(pay_amt, mul(buy_amt * 10 ** 9, div(offers[offerId].buy_amt, offers[offerId].pay_amt)) / 10 ** 9); // Add proportional amount of last offer to pay accumulator
     }
 
     // ---- Internal Functions ---- //
