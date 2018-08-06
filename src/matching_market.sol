@@ -106,6 +106,16 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
         uint oBuyAmt,                               // taker buy amount (original value)
         ERC20 buyGem                                // taker buy token
     ) public returns (uint sellAmt, uint buyAmt) {
+        (sellAmt, buyAmt) = buyOffers(oSellAmt, sellGem, oBuyAmt, buyGem, 0);
+    }
+
+    function buyOffers(
+        uint oSellAmt,                              // taker sell amount (original value)
+        ERC20 sellGem,                              // taker sell token
+        uint oBuyAmt,                               // taker buy amount (original value)
+        ERC20 buyGem,                               // taker buy token
+        uint maxMatch                               // the maximum number of offers to match
+    ) public returns (uint sellAmt, uint buyAmt) {
         require(dust[sellGem] <= oSellAmt, "Offer sell quantity is less then required.");
 
         sellAmt = oSellAmt;                         // taker sell amount (countdown)
@@ -113,44 +123,20 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
 
         // Auxiliary variables for existing offers which are opposite to the one being created
         uint bestMatchingId;                        // best matching id
-        uint matchingOSellAmt;                      // sell amount (original value)
-        uint matchingOBuyAmt;                       // buy amount (original value)
-        uint matchingSellAmt;                       // sell amount (countdown)
+        uint matchingSellAmt;                       // matching offer's sellAmt
+        uint countMatch;                            // count the number of matched offers
 
         // There is at least one offer stored for token pair
-        while ((bestMatchingId = best[buyGem][sellGem]) > 0) {
-            matchingOSellAmt = offers[bestMatchingId].oSellAmt;
-            matchingOBuyAmt = offers[bestMatchingId].oBuyAmt;
+        while ((bestMatchingId = best[buyGem][sellGem]) > 0 
+            && (maxMatch == 0 || countMatch++ < maxMatch)) {
             matchingSellAmt = offers[bestMatchingId].sellAmt;
 
-            // Handle round-off error. Based on the idea that
-            // the furthest the amounts can stray from their "true" values is 1.
-            // Ergo the worst case has sellAmt and matchingSellAmt at +1 away from
-            // their "correct" values and matchingObuyAmt and buyAmt at -1.
-            // Since (c - 1) * (d - 1) > (a + 1) * (b + 1) is equivalent to
-            // c * d > a * b + a + b + c + d, we write...
-            if (mul(matchingOBuyAmt, oBuyAmt) >
-                add(
-                    add(
-                        add(
-                            add(mul(oSellAmt, matchingOSellAmt), matchingOBuyAmt),
-                            oBuyAmt
-                        ),
-                        oSellAmt
-                    ),
-                    matchingOSellAmt
-                )
-            ) {
-                break;
-            }
-
+            if (notMatching(oSellAmt, oBuyAmt, bestMatchingId)) { break; }
             buy(bestMatchingId, min(matchingSellAmt, buyAmt));
             buyAmt = sub(buyAmt, min(matchingSellAmt, buyAmt));
             sellAmt = mul(buyAmt, oSellAmt) / oBuyAmt;
 
-            if (sellAmt == 0 || buyAmt == 0) {
-                break;
-            }
+            if (sellAmt == 0 || buyAmt == 0) { break; }
         }
     }
 
@@ -168,7 +154,8 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
     // keepers need to use this function
     function insert(
         uint id,                        // maker (ask) id
-        uint pos                        // position to insert into
+        uint pos,                       // position to insert into
+        uint matchCount                 // maximum number of offers to be matched
     ) public returns (bool) {
         require(
             !isOfferSorted(id),         // make sure offers[id] is not yet sorted
@@ -179,8 +166,21 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
             "Offer has been canceled, taken, or never existed."
         );
 
-        _hide(id);                      // remove offer from unsorted offers list
-        _sort(id, pos);                 // put offer into the sorted offers list
+        buyOffers(
+            offers[id].oSellAmt, 
+            offers[id].sellGem, 
+            offers[id].oBuyAmt, 
+            offers[id].buyGem, 
+            matchCount
+        );
+        if(offers[id].buyAmt > 0 && offers[id].sellAmt > 0) {
+            if(notMatching(offers[id].oSellAmt, offers[id].oBuyAmt, best[offers[id].buyGem][offers[id].sellGem])){
+                _hide(id);                      // remove offer from unsorted offers list
+                _sort(id, pos);                 // put offer into the sorted offers list
+            } 
+        } else {
+            _hide(id);                      // remove offer from unsorted offers list
+        }
         emit LogInsert(msg.sender, id);
         return true;
     }
@@ -329,6 +329,32 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
     }
 
     // ---- Internal Functions ---- //
+
+    //returns true if matchingId does not match with offer represented with oSellAmt and oBuyAmt
+    function notMatching(uint oSellAmt, uint oBuyAmt, uint matchingId) internal view returns (bool) {
+        uint matchingOSellAmt = offers[matchingId].oSellAmt;
+        uint matchingOBuyAmt = offers[matchingId].oBuyAmt;
+        // Handle round-off error. Based on the idea that
+        // the furthest the amounts can stray from their "true" values is 1.
+        // Ergo the worst case has sellAmt and bestOffer.sellAmt at +1 away from
+        // their "correct" values and matchingObuyAmt and buyAmt at -1.
+        // Since (c - 1) * (d - 1) > (a + 1) * (b + 1) is equivalent to
+        // c * d > a * b + a + b + c + d, we write...
+        return mul(matchingOBuyAmt, oBuyAmt) >
+            add(
+                add(
+                    add(
+                        add(
+                            mul(oSellAmt, matchingOSellAmt), 
+                            matchingOBuyAmt
+                        ),
+                        oBuyAmt
+                    ),
+                    oSellAmt
+                ),
+                matchingOSellAmt
+            );
+    }
 
     // Find the id of the next higher offer after offers[id]
     function _findpos(uint id) internal view returns (uint) {

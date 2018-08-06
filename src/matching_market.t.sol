@@ -447,7 +447,7 @@ contract OrderMatchingTest is DSTest, EventfulMarket, MatchingEvents {
         offerId[1] = otc.offer(30, mkr, 100, dai);
         offerId[2] = otc.offer(30, mkr, 100, dai);
         offerId[3] = otc.offer(30, mkr, 100, dai);
-        otc.insert(offerId[3], 0);
+        otc.insert(offerId[3], 0, 0);
         assertEq(otc.best(mkr, dai), offerId[3]);
         assertEq(otc.head(), offerId[2]);
         assertEq(otc.near(offerId[1]), 0);
@@ -460,8 +460,8 @@ contract OrderMatchingTest is DSTest, EventfulMarket, MatchingEvents {
         offerId[1] = otc.offer(30, mkr, 100, dai);
         offerId[2] = otc.offer(30, mkr, 100, dai);
         offerId[3] = otc.offer(30, mkr, 100, dai);
-        otc.insert(offerId[3],0);
-        otc.insert(offerId[2],0);
+        otc.insert(offerId[3],0, 0);
+        otc.insert(offerId[2],0, 0);
         assertEq(otc.head(), offerId[1]);
         assertEq(otc.near(offerId[1]), 0);
         assertEq(otc.near(offerId[2]), 0);
@@ -473,9 +473,9 @@ contract OrderMatchingTest is DSTest, EventfulMarket, MatchingEvents {
         offerId[1] = otc.offer(30, mkr, 100, dai);
         offerId[2] = otc.offer(30, mkr, 100, dai);
         offerId[3] = otc.offer(30, mkr, 100, dai);
-        otc.insert(offerId[3],0);
-        otc.insert(offerId[2],0);
-        otc.insert(offerId[1],0);
+        otc.insert(offerId[3],0, 0);
+        otc.insert(offerId[2],0, 0);
+        otc.insert(offerId[1],0, 0);
         assertEq(otc.head(), 0);
         assertEq(otc.near(offerId[1]), 0);
         assertEq(otc.near(offerId[2]), 0);
@@ -485,14 +485,14 @@ contract OrderMatchingTest is DSTest, EventfulMarket, MatchingEvents {
     function testFailInsertOfferThatIsAlreadyInTheSortedList() public {
         mkr.approve(otc, 30);
         offerId[1] = otc.offer(30, mkr, 100, dai, 0);
-        otc.insert(offerId[1],0);
-        otc.insert(offerId[1],0);
+        otc.insert(offerId[1],0, 0);
+        otc.insert(offerId[1],0, 0);
     }
 
     function testFailInsertOfferThatHasWrongInserPosition() public {
         mkr.approve(otc, 30);
         offerId[1] = otc.offer(30, mkr, 100, dai, 0);
-        otc.insert(offerId[1],7);  //there is no active offer at pos 7
+        otc.insert(offerId[1],7, 0);  //there is no active offer at pos 7
     }
 
     function testSetGetDustLimitAmout() public {
