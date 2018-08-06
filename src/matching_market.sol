@@ -105,8 +105,8 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
         ERC20 sellGem,                              // taker sell token
         uint oBuyAmt,                               // taker buy amount (original value)
         ERC20 buyGem                                // taker buy token
-    ) public returns (uint sellAmt, uint buyAmt) {
-        (sellAmt, buyAmt) = buyOffers(oSellAmt, sellGem, oBuyAmt, buyGem, 0);
+    ) public returns (uint, uint) {
+        return buyOffers(oSellAmt, sellGem, oBuyAmt, buyGem, 0);
     }
 
     function buyOffers(
