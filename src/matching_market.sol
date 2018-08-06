@@ -166,7 +166,7 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
             "Offer has been canceled, taken, or never existed."
         );
 
-        buyOffers(
+        (offers[id].sellAmt, offers[id].buyAmt) = buyOffers(
             offers[id].oSellAmt, 
             offers[id].sellGem, 
             offers[id].oBuyAmt, 
@@ -177,11 +177,11 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
             if(notMatching(offers[id].oSellAmt, offers[id].oBuyAmt, best[offers[id].buyGem][offers[id].sellGem])){
                 _hide(id);                      // remove offer from unsorted offers list
                 _sort(id, pos);                 // put offer into the sorted offers list
+                emit LogInsert(msg.sender, id);
             } 
         } else {
             _hide(id);                      // remove offer from unsorted offers list
         }
-        emit LogInsert(msg.sender, id);
         return true;
     }
 
@@ -332,6 +332,7 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
 
     //returns true if matchingId does not match with offer represented with oSellAmt and oBuyAmt
     function notMatching(uint oSellAmt, uint oBuyAmt, uint matchingId) internal view returns (bool) {
+        if (matchingId == 0) return true;
         uint matchingOSellAmt = offers[matchingId].oSellAmt;
         uint matchingOBuyAmt = offers[matchingId].oBuyAmt;
         // Handle round-off error. Based on the idea that
