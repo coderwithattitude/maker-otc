@@ -455,6 +455,86 @@ contract OrderMatchingTest is DSTest, EventfulMarket, MatchingEvents {
         assertEq(otc.near(offerId[3]), 0);
     }
 
+    function testUnsortedOneSortedOfferAfterInsertOne() public {
+        mkr.approve(otc, 90);
+        dai.transfer(user1, 50);
+        user1.doApprove(otc, 50, dai);
+        offerId[1] = otc.offer(30, mkr, 100, dai);
+        offerId[2] = otc.offer(30, mkr, 100, dai);
+        offerId[3] = otc.offer(30, mkr, 100, dai);
+        offerId[4] = user1.doOffer(50, dai, 15, mkr);
+        otc.insert(offerId[3], 0, 0);
+        assertEq(otc.best(mkr, dai), offerId[3]);
+        assertEq(otc.head(), offerId[2]);
+        assertEq(otc.near(offerId[1]), 0);
+        assertEq(otc.near(offerId[2]), offerId[1]);
+        assertEq(otc.near(offerId[3]), 0);
+        (,, sellAmt, sellGem, buyAmt, buyGem,,) = otc.offers(offerId[3]);
+        assertEq(sellAmt, 15);
+        assertEq(buyAmt, 50);
+        assert(!otc.isActive(offerId[4]));
+    }
+
+    function testUnsortedTwoSortedOfferAfterInsertOne() public {
+        mkr.approve(otc, 90);
+        dai.transfer(user1, 100);
+        user1.doApprove(otc, 100, dai);
+        offerId[1] = otc.offer(30, mkr, 100, dai);
+        offerId[2] = otc.offer(30, mkr, 100, dai);
+        offerId[3] = otc.offer(30, mkr, 100, dai);
+        offerId[4] = user1.doOffer(50, dai, 15, mkr);
+        offerId[5] = user1.doOffer(50, dai, 15, mkr);
+        otc.insert(offerId[3], 0, 0);
+        assertEq(otc.best(mkr, dai), 0);
+        assertEq(otc.head(), offerId[2]);
+        assertEq(otc.near(offerId[1]), 0);
+        assertEq(otc.near(offerId[2]), offerId[1]);
+        assertEq(otc.near(offerId[3]), 0);
+        assert(!otc.isActive(offerId[3]));
+        assert(!otc.isActive(offerId[4]));
+        assert(!otc.isActive(offerId[5]));
+    }
+
+    function testUnsortedTwoSortedOfferAfterInsertOneExact() public {
+        mkr.approve(otc, 90);
+        dai.transfer(user1, 100);
+        user1.doApprove(otc, 100, dai);
+        offerId[1] = otc.offer(30, mkr, 100, dai);
+        offerId[2] = otc.offer(30, mkr, 100, dai);
+        offerId[3] = otc.offer(30, mkr, 100, dai);
+        offerId[4] = user1.doOffer(50, dai, 15, mkr);
+        offerId[5] = user1.doOffer(50, dai, 15, mkr);
+        otc.insert(offerId[3], 0, 2);
+        assertEq(otc.best(mkr, dai), 0);
+        assertEq(otc.head(), offerId[2]);
+        assertEq(otc.near(offerId[1]), 0);
+        assertEq(otc.near(offerId[2]), offerId[1]);
+        assertEq(otc.near(offerId[3]), 0);
+        assert(!otc.isActive(offerId[3]));
+        assert(!otc.isActive(offerId[4]));
+        assert(!otc.isActive(offerId[5]));
+    }
+
+    function testUnsortedTwoSortedOfferAfterInsertOneMatchOne() public {
+        mkr.approve(otc, 90);
+        dai.transfer(user1, 100);
+        user1.doApprove(otc, 100, dai);
+        offerId[1] = otc.offer(30, mkr, 100, dai);
+        offerId[2] = otc.offer(30, mkr, 100, dai);
+        offerId[3] = otc.offer(30, mkr, 100, dai);
+        offerId[4] = user1.doOffer(50, dai, 15, mkr);
+        offerId[5] = user1.doOffer(50, dai, 15, mkr);
+        otc.insert(offerId[3], 0, 1);
+        assertEq(otc.best(mkr, dai), 0);
+        assertEq(otc.head(), offerId[3]);
+        assertEq(otc.near(offerId[1]), 0);
+        assertEq(otc.near(offerId[2]), offerId[1]);
+        assertEq(otc.near(offerId[3]), offerId[2]);
+        assert(otc.isActive(offerId[3]));
+        assert(!otc.isActive(offerId[4]));
+        assert(otc.isActive(offerId[5]));
+    }
+
     function testGetFirstNextUnsortedOfferAfterInsertTwo() public {
         mkr.approve(otc, 90);
         offerId[1] = otc.offer(30, mkr, 100, dai);

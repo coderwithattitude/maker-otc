@@ -137,6 +137,46 @@ contract SimpleMarket is EventfulMarket, DSMath {
     function buy(uint id, uint quantity)
         public
         canBuy(id)
+        returns (bool)
+    {
+        return buy(id, quantity, msg.sender, msg.sender);
+    }
+
+    // Cancel an offer. Refunds offer maker.
+    function cancel(uint id)
+        public
+        canCancel(id)
+        nonReentrant
+        returns (bool success)
+    {
+        // Read-only offer. Modify an offer by directly accessing offers[id]
+        OfferInfo memory offerInfo = offers[id];
+        delete offers[id];
+
+        if(offerInfo.sellAmt > 0) {
+            require(offerInfo.sellGem.transfer(offerInfo.owner, offerInfo.sellAmt), "Sell token could not be transferred.");
+        }
+        emit LogItemUpdate(id);
+        emit LogKill(
+            bytes32(id),
+            keccak256(abi.encodePacked(offerInfo.sellGem, offerInfo.buyGem)),
+            offerInfo.owner,
+            offerInfo.sellGem,
+            offerInfo.buyGem,
+            uint128(offerInfo.sellAmt),
+            uint128(offerInfo.buyAmt),
+            uint64(now)
+        );
+
+        success = true;
+    }
+
+    // Accept given `quantity` of an offer. Transfers funds from caller to
+    // offer maker, and from market to caller.
+    // can be used to buy for either msg.sender of anyone else
+    function buy(uint id, uint quantity, address sellFor, address buyFor)
+        internal
+        canBuy(id)
         nonReentrant
         returns (bool)
     {
@@ -153,8 +193,8 @@ contract SimpleMarket is EventfulMarket, DSMath {
 
         offers[id].sellAmt = sub(offerInfo.sellAmt, quantity);
         offers[id].buyAmt = sub(offerInfo.buyAmt, spend);
-        require(offerInfo.buyGem.transferFrom(msg.sender, offerInfo.owner, spend), "Buy token could not be transferred.");
-        require(offerInfo.sellGem.transfer(msg.sender, quantity), "Sell token could not be transferred.");
+        require(offerInfo.buyGem.transferFrom(sellFor, offerInfo.owner, spend), "Buy token could not be transferred.");
+        require(offerInfo.sellGem.transfer(buyFor, quantity), "Sell token could not be transferred.");
 
         emit LogItemUpdate(id);
         emit LogTake(
@@ -163,7 +203,7 @@ contract SimpleMarket is EventfulMarket, DSMath {
             offerInfo.owner,
             offerInfo.sellGem,
             offerInfo.buyGem,
-            msg.sender,
+            buyFor,
             uint128(quantity),
             uint128(spend),
             uint64(now)
@@ -177,31 +217,4 @@ contract SimpleMarket is EventfulMarket, DSMath {
         return true;
     }
 
-    // Cancel an offer. Refunds offer maker.
-    function cancel(uint id)
-        public
-        canCancel(id)
-        nonReentrant
-        returns (bool success)
-    {
-        // Read-only offer. Modify an offer by directly accessing offers[id]
-        OfferInfo memory offerInfo = offers[id];
-        delete offers[id];
-
-        require(offerInfo.sellGem.transfer(offerInfo.owner, offerInfo.sellAmt), "Sell token could not be transferred.");
-
-        emit LogItemUpdate(id);
-        emit LogKill(
-            bytes32(id),
-            keccak256(abi.encodePacked(offerInfo.sellGem, offerInfo.buyGem)),
-            offerInfo.owner,
-            offerInfo.sellGem,
-            offerInfo.buyGem,
-            uint128(offerInfo.sellAmt),
-            uint128(offerInfo.buyAmt),
-            uint64(now)
-        );
-
-        success = true;
-    }
 }
