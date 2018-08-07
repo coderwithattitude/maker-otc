@@ -82,48 +82,16 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
     }
 
     function buy(uint id, uint amount) public canBuy(id) returns (bool) {
-        return buy(id, amount, msg.sender, msg.sender);
+        return _buy(id, amount, msg.sender, msg.sender);
     }
+
     function buyOffers(
         uint oSellAmt,                              // taker sell amount (original value)
         ERC20 sellGem,                              // taker sell token
         uint oBuyAmt,                               // taker buy amount (original value)
         ERC20 buyGem                                // taker buy token
     ) public returns (uint, uint) {
-        return buyOffers(oSellAmt, sellGem, oBuyAmt, buyGem, 0, msg.sender, msg.sender);
-    }
-
-    function buyOffers(
-        uint oSellAmt,                              // taker sell amount (original value)
-        ERC20 sellGem,                              // taker sell token
-        uint oBuyAmt,                               // taker buy amount (original value)
-        ERC20 buyGem,                               // taker buy token
-        uint maxMatch,                              // the maximum number of offers to match
-        address sellFor,                            // sell tokens in the name of this address
-        address buyFor                              // buy tokens in the name of this address
-    ) public returns (uint sellAmt, uint buyAmt) {
-        require(dust[sellGem] <= oSellAmt, "Offer sell quantity is less then required.");
-
-        sellAmt = oSellAmt;                         // taker sell amount (countdown)
-        buyAmt = oBuyAmt;                           // taker buy amount (countdown)
-
-        // Auxiliary variables for existing offers which are opposite to the one being created
-        uint bestMatchingId;                        // best matching id
-        uint matchingSellAmt;                       // matching offer's sellAmt
-        uint countMatch;                            // count the number of matched offers
-
-        // There is at least one offer stored for token pair
-        while ((bestMatchingId = best[buyGem][sellGem]) > 0 
-            && (maxMatch == 0 || countMatch++ < maxMatch)) {
-            matchingSellAmt = offers[bestMatchingId].sellAmt;
-
-            if (notMatching(oSellAmt, oBuyAmt, bestMatchingId)) { break; }
-            buy(bestMatchingId, min(matchingSellAmt, buyAmt), sellFor, buyFor);
-            buyAmt = sub(buyAmt, min(matchingSellAmt, buyAmt));
-            sellAmt = mul(buyAmt, oSellAmt) / oBuyAmt;
-
-            if (sellAmt == 0 || buyAmt == 0) { break; }
-        }
+        return _buyOffers(oSellAmt, sellGem, oBuyAmt, buyGem, 0, msg.sender, msg.sender);
     }
 
     // Cancel an offer. Refunds offer maker.
@@ -152,7 +120,7 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
             "Offer has been canceled, taken, or never existed."
         );
 
-        (offers[id].sellAmt, offers[id].buyAmt) = buyOffers(
+        (offers[id].sellAmt, offers[id].buyAmt) = _buyOffers(
             offers[id].oSellAmt, 
             offers[id].sellGem, 
             offers[id].oBuyAmt, 
@@ -162,7 +130,7 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
             offers[id].owner
         );
         if(offers[id].buyAmt > 0 && offers[id].sellAmt > 0) {
-            if(notMatching(
+            if(_notMatching(
                 offers[id].oSellAmt, 
                 offers[id].oBuyAmt,
                 best[offers[id].buyGem][offers[id].sellGem]
@@ -323,7 +291,7 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
     // ---- Internal Functions ---- //
 
     // Transfers funds from caller to offer maker, and from market to caller.
-    function buy(uint id, uint amount, address sellFor, address buyFor) internal canBuy(id) returns (bool) {
+    function _buy(uint id, uint amount, address sellFor, address buyFor) internal canBuy(id) returns (bool) {
         // If all the amount is bought, remove offer sorting data
         if (amount == offers[id].sellAmt){
             if (isOfferSorted(id)) {
@@ -332,7 +300,7 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
                 require(_hide(id), "Offer could not be removed from unsorted list.");
             }
         }
-        require(super.buy(id, amount, sellFor, buyFor), "Too large, or too low buy quantity.");
+        require(super._buy(id, amount, sellFor, buyFor), "Too large, or too low buy quantity.");
 
         // If offer has become dust during buy, we cancel it
         if (isActive(id) && offers[id].sellAmt < dust[offers[id].sellGem]) {
@@ -342,31 +310,68 @@ contract MatchingMarket is MatchingEvents, ExpiringMarket, DSNote {
         return true;
     }
 
-    //returns true if matchingId does not match with offer represented with oSellAmt and oBuyAmt
-    function notMatching(uint oSellAmt, uint oBuyAmt, uint matchingId) internal view returns (bool) {
-        if (matchingId == 0) return true;
-        uint matchingOSellAmt = offers[matchingId].oSellAmt;
-        uint matchingOBuyAmt = offers[matchingId].oBuyAmt;
+    // Returns true if matchingId does not match with offer represented with oSellAmt and oBuyAmt
+    function _notMatching(uint oSellAmt, uint oBuyAmt, uint matchingId) internal view returns (bool) {
+        if (matchingId == 0) {
+            return true;
+        }
         // Handle round-off error. Based on the idea that
         // the furthest the amounts can stray from their "true" values is 1.
         // Ergo the worst case has sellAmt and bestOffer.sellAmt at +1 away from
-        // their "correct" values and matchingObuyAmt and buyAmt at -1.
+        // their "correct" values and offers[matchingId].oBuyAmt and buyAmt at -1.
         // Since (c - 1) * (d - 1) > (a + 1) * (b + 1) is equivalent to
         // c * d > a * b + a + b + c + d, we write...
-        return mul(matchingOBuyAmt, oBuyAmt) >
+        return mul(offers[matchingId].oBuyAmt, oBuyAmt) >
             add(
                 add(
                     add(
                         add(
-                            mul(oSellAmt, matchingOSellAmt), 
-                            matchingOBuyAmt
+                            mul(oSellAmt, offers[matchingId].oSellAmt), 
+                            offers[matchingId].oBuyAmt
                         ),
                         oBuyAmt
                     ),
                     oSellAmt
                 ),
-                matchingOSellAmt
+                offers[matchingId].oSellAmt
             );
+    }
+
+    function _buyOffers(
+        uint oSellAmt,                              // taker sell amount (original value)
+        ERC20 sellGem,                              // taker sell token
+        uint oBuyAmt,                               // taker buy amount (original value)
+        ERC20 buyGem,                               // taker buy token
+        uint maxMatch,                              // the maximum number of offers to match
+        address sellFor,                            // sell tokens in the name of this address
+        address buyFor                              // buy tokens in the name of this address
+    ) internal returns (uint sellAmt, uint buyAmt) {
+        require(dust[sellGem] <= oSellAmt, "Offer sell quantity is less then required.");
+
+        sellAmt = oSellAmt;                         // taker sell amount (countdown)
+        buyAmt = oBuyAmt;                           // taker buy amount (countdown)
+
+        // Auxiliary variables for existing offers which are opposite to the one being created
+        uint bestMatchingId;                        // best matching id
+        uint matchingSellAmt;                       // matching offer's sellAmt
+        uint countMatch;                            // count the number of matched offers
+
+        // There is at least one offer stored for token pair
+        while ((bestMatchingId = best[buyGem][sellGem]) > 0 && (maxMatch == 0 || countMatch++ < maxMatch)) {
+            matchingSellAmt = offers[bestMatchingId].sellAmt;
+
+            if (_notMatching(oSellAmt, oBuyAmt, bestMatchingId)) {
+                break;
+            }
+
+            _buy(bestMatchingId, min(matchingSellAmt, buyAmt), sellFor, buyFor);
+            buyAmt = sub(buyAmt, min(matchingSellAmt, buyAmt));
+            sellAmt = mul(buyAmt, oSellAmt) / oBuyAmt;
+
+            if (sellAmt == 0 || buyAmt == 0) {
+                break;
+            }
+        }
     }
 
     // Find the id of the next higher offer after offers[id]

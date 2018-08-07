@@ -139,7 +139,7 @@ contract SimpleMarket is EventfulMarket, DSMath {
         canBuy(id)
         returns (bool)
     {
-        return buy(id, quantity, msg.sender, msg.sender);
+        return _buy(id, quantity, msg.sender, msg.sender);
     }
 
     // Cancel an offer. Refunds offer maker.
@@ -174,7 +174,7 @@ contract SimpleMarket is EventfulMarket, DSMath {
     // Accept given `quantity` of an offer. Transfers funds from caller to
     // offer maker, and from market to caller.
     // can be used to buy for either msg.sender of anyone else
-    function buy(uint id, uint quantity, address sellFor, address buyFor)
+    function _buy(uint id, uint quantity, address sellFor, address buyFor)
         internal
         canBuy(id)
         nonReentrant
